@@ -1,5 +1,12 @@
 # Day 11 — Controlled Agent Security (2026)
 
+**Họ và tên:** Trần Trọng Chinh  
+**MSSV:** 2A202602720  
+**Lớp:** K4  
+**Báo cáo hoàn chỉnh:** [`report/2A202602720_report.md`](report/2A202602720_report.md)  
+
+---
+
 Làm sao để ứng dụng agent an toàn hơn?
 
 **Hình thức:** bài tập **cá nhân** (1 người / 1 MSSV).

@@ -35,12 +35,50 @@ class MonitoringAlert:
     judge_fails: int = 0
 
     def check_metrics(self) -> list[Alert]:
-        """TODO: compute rates, append Alert objects when thresholds exceeded."""
-        raise NotImplementedError("Implement MonitoringAlert.check_metrics")
+        """Compute rates, append Alert objects when thresholds exceeded."""
+        self.alerts = []
+        block_rate = (self.blocked_requests / self.total_requests) if self.total_requests else 0.0
+        if block_rate >= self.block_rate_threshold:
+            self.alerts.append(
+                Alert(
+                    metric="block_rate",
+                    value=round(block_rate, 4),
+                    threshold=self.block_rate_threshold,
+                    message=f"High block rate detected: {block_rate:.1%} >= {self.block_rate_threshold:.1%}",
+                )
+            )
+
+        if self.rate_limit_hits >= self.rate_limit_hit_threshold:
+            self.alerts.append(
+                Alert(
+                    metric="rate_limit_hits",
+                    value=float(self.rate_limit_hits),
+                    threshold=float(self.rate_limit_hit_threshold),
+                    message=f"Rate limit hit threshold exceeded: {self.rate_limit_hits} >= {self.rate_limit_hit_threshold}",
+                )
+            )
+
+        judge_fail_rate = (self.judge_fails / self.judge_checks) if self.judge_checks else 0.0
+        if judge_fail_rate >= self.judge_fail_rate_threshold:
+            self.alerts.append(
+                Alert(
+                    metric="judge_fail_rate",
+                    value=round(judge_fail_rate, 4),
+                    threshold=self.judge_fail_rate_threshold,
+                    message=f"Judge fail rate exceeded: {judge_fail_rate:.1%} >= {self.judge_fail_rate_threshold:.1%}",
+                )
+            )
+
+        return self.alerts
 
     def export_json(self, filepath: str = "outputs/metrics.json"):
-        """TODO: write metrics + alerts to JSON."""
-        raise NotImplementedError("Implement MonitoringAlert.export_json")
+        """Write metrics + alerts to JSON."""
+        from pathlib import Path
+        self.check_metrics()
+        path = Path(filepath)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(self.snapshot(), ensure_ascii=False, indent=2), encoding="utf-8")
+        return path
 
     def snapshot(self) -> dict:
         block_rate = (

@@ -13,6 +13,11 @@ import sys
 import asyncio
 import argparse
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 from core.config import setup_api_key
 
 
@@ -159,7 +164,7 @@ async def part5_assignment_suite():
         run_assignment_suite,
     )
 
-    student_id = os.environ.get("STUDENT_ID", "").strip() or "SE00000"
+    student_id = os.environ.get("STUDENT_ID", "").strip() or "2A202602720"
     try:
         plugins = build_production_plugins()
         audit, monitor = build_observability()

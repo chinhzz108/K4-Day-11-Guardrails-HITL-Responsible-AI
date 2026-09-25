@@ -5,6 +5,12 @@ Lab 11 — Part 2A: Input Guardrails
   TODO 3: Input Guardrail Plugin (ADK)
 """
 import re
+import sys
+from pathlib import Path
+
+SRC_DIR = str(Path(__file__).resolve().parent.parent)
+if SRC_DIR not in sys.path:
+    sys.path.insert(0, SRC_DIR)
 
 from google.genai import types
 from google.adk.plugins import base_plugin
@@ -32,8 +38,18 @@ from core.config import ALLOWED_TOPICS, BLOCKED_TOPICS
 # Regex is one signal, not the whole security boundary.
 # ============================================================
 
+ZERO_WIDTH = "\u200b\u200c\u200d\ufeff\u2060"
+
+
+def normalize_for_security(text: str) -> str:
+    """Canonicalize Unicode and strip invisible separators before policy checks."""
+    import unicodedata
+    normalized = unicodedata.normalize("NFKC", text or "")
+    return normalized.translate(str.maketrans("", "", ZERO_WIDTH))
+
+
 def detect_injection(user_input: str) -> bool:
-    """Detect prompt injection patterns in user input.
+    """Detect prompt injection patterns in user input after canonicalization.
 
     Args:
         user_input: The user's message
@@ -41,14 +57,26 @@ def detect_injection(user_input: str) -> bool:
     Returns:
         True if injection detected, False otherwise
     """
+    clean_input = normalize_for_security(user_input)
+
     INJECTION_PATTERNS = [
-        # TODO: Add at least 5 regex patterns
-        # Example:
-        # r"ignore (all )?(previous|above) instructions",
+        r"ignore\s+(?:all\s+)?(?:previous|above|prior)?\s*instructions?",
+        r"you\s+are\s+now\b",
+        r"system\s+(?:prompt|override|instruction)",
+        r"reveal\s+(?:your\s+)?(?:instructions?|prompt|credentials?|secrets?|passwords?|keys?)",
+        r"pretend\s+(?:you\s+are|to\s+be)",
+        r"act\s+as\s+(?:a\s+|an\s+)?(?:unrestricted|dan|jailbreak|root|admin)",
+        r"disregard\s+(?:all\s+)?(?:prior|previous|above)?\s*directives?",
+        r"forget\s+(?:all\s+)?(?:your\s+)?(?:instructions|previous|prior)",
+        r"bỏ\s+qua\s+(?:mọi\s+)?hướng\s+dẫn",
+        r"tiết\s+lộ\s+(?:mật\s*khẩu|api|thông\s*tin\s*nội\s*bộ|hướng\s+dẫn)",
+        r"(?:admin\s*password|api\s*key|database\s*details|db\.vinbank\.internal)",
+        r"(?:fill\s+in\s+(?:the\s+)?blank|reveal\s+the\s+internal\s+password)",
+        r"(?:show|give|display|print)\s+(?:me\s+)?(?:the\s+)?(?:admin\s+password|system\s+prompt|api\s+key)",
     ]
 
     for pattern in INJECTION_PATTERNS:
-        if re.search(pattern, user_input, re.IGNORECASE):
+        if re.search(pattern, clean_input, re.IGNORECASE):
             return True
     return False
 
@@ -72,14 +100,22 @@ def topic_filter(user_input: str) -> bool:
     Returns:
         True if input should be BLOCKED (off-topic or blocked topic)
     """
-    input_lower = user_input.lower()
+    clean_input = normalize_for_security(user_input).lower().strip()
+    if not clean_input:
+        return True
 
-    # TODO: Implement logic:
-    # 1. If input contains any blocked topic -> return True
-    # 2. If input doesn't contain any allowed topic -> return True
+    # 1. If input contains any blocked topic -> return True (block)
+    for blocked in BLOCKED_TOPICS:
+        if blocked.lower() in clean_input:
+            return True
+
+    # 2. If input doesn't contain any allowed topic -> return True (block)
+    has_allowed = any(allowed.lower() in clean_input for allowed in ALLOWED_TOPICS)
+    if not has_allowed:
+        return True
+
     # 3. Otherwise -> return False (allow)
-
-    pass  # Replace with your implementation
+    return False
 
 
 # ============================================================
@@ -132,14 +168,23 @@ class InputGuardrailPlugin(base_plugin.BasePlugin):
         self.total_count += 1
         text = self._extract_text(user_message)
 
-        # TODO: Implement logic:
-        # 1. Call detect_injection(text)
-        #    - If True: increment blocked_count, return self._block_response("...")
-        # 2. Call topic_filter(text)
-        #    - If True: increment blocked_count, return self._block_response("...")
-        # 3. If both are False: return None (let message through)
+        if not text or not text.strip():
+            self.blocked_count += 1
+            return self._block_response("Input cannot be empty. Please ask a banking-related question.")
 
-        pass  # Replace with your implementation
+        if detect_injection(text):
+            self.blocked_count += 1
+            return self._block_response(
+                "I cannot process that request. I'm here to help with VinBank banking questions only."
+            )
+
+        if topic_filter(text):
+            self.blocked_count += 1
+            return self._block_response(
+                "I'm a VinBank assistant and can only help with banking-related questions. How can I assist you with your account, transactions, or other banking needs?"
+            )
+
+        return None
 
 
 # ============================================================

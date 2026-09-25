@@ -65,32 +65,41 @@ class ConfidenceRouter:
         Returns:
             RoutingDecision with routing action and metadata
         """
-        # TODO 11: Implement routing logic
-        #
         # 1. Check if action_type is in HIGH_RISK_ACTIONS
-        #    -> If yes: always escalate (action="escalate", priority="high",
-        #       requires_human=True, reason="High-risk action: {action_type}")
-        #
-        # 2. Check confidence thresholds:
-        #    - confidence >= 0.9:
-        #      action="auto_send", priority="low",
-        #      requires_human=False, reason="High confidence"
-        #
-        #    - 0.7 <= confidence < 0.9:
-        #      action="queue_review", priority="normal",
-        #      requires_human=True, reason="Medium confidence — needs review"
-        #
-        #    - confidence < 0.7:
-        #      action="escalate", priority="high",
-        #      requires_human=True, reason="Low confidence — escalating"
+        if action_type in HIGH_RISK_ACTIONS:
+            return RoutingDecision(
+                action="escalate",
+                confidence=confidence,
+                reason=f"High-risk action: {action_type}",
+                priority="high",
+                requires_human=True,
+            )
 
-        return RoutingDecision(
-            action="auto_send",
-            confidence=confidence,
-            reason="TODO: implement routing logic",
-            priority="low",
-            requires_human=False,
-        )  # TODO: Replace with implementation
+        # 2. Check confidence thresholds:
+        if confidence >= self.HIGH_THRESHOLD:
+            return RoutingDecision(
+                action="auto_send",
+                confidence=confidence,
+                reason="High confidence",
+                priority="low",
+                requires_human=False,
+            )
+        elif confidence >= self.MEDIUM_THRESHOLD:
+            return RoutingDecision(
+                action="queue_review",
+                confidence=confidence,
+                reason="Medium confidence — needs review",
+                priority="normal",
+                requires_human=True,
+            )
+        else:
+            return RoutingDecision(
+                action="escalate",
+                confidence=confidence,
+                reason="Low confidence — escalating",
+                priority="high",
+                requires_human=True,
+            )
 
 
 # ============================================================
@@ -111,33 +120,33 @@ class ConfidenceRouter:
 hitl_decision_points = [
     {
         "id": 1,
-        "name": "TODO: Name this decision point",
-        "trigger": "TODO: When does this trigger?",
-        "hitl_model": "TODO: human-in-the-loop / human-on-the-loop / human-as-tiebreaker",
-        "context_needed": "TODO: What does the reviewer need to see?",
-        "example": "TODO: Give a concrete example scenario",
-        "approval_path": "TODO: Explain approve, reject and timeout behavior",
-        "audit_fields": "TODO: List correlation ID, intent, diff and reviewer decision",
+        "name": "High-Value Fund Transfer & Account Closure Authorization",
+        "trigger": "Action is high-risk ('transfer_money', 'close_account') or transaction exceeds threshold (>= 10,000,000 VND)",
+        "hitl_model": "human-in-the-loop",
+        "context_needed": "Customer KYC status, source/destination accounts, transfer amount, intent summary, diff of account balance before and after, risk score",
+        "example": "Customer requests transferring 500,000,000 VND to an external recipient; system drafts transaction and halts execution awaiting compliance officer approval",
+        "approval_path": "Approve: records signed approval_id (e.g. HITL-TRF12345) and executes transfer; Reject: cancels transaction with justification; Timeout (10m): fails closed and cancels request",
+        "audit_fields": "correlation_id, request_id, reviewer_id, user_id, action_type, intent, diff, decision, timestamp, security_flags",
     },
     {
         "id": 2,
-        "name": "TODO: Name this decision point",
-        "trigger": "TODO: When does this trigger?",
-        "hitl_model": "TODO: human-in-the-loop / human-on-the-loop / human-as-tiebreaker",
-        "context_needed": "TODO: What does the reviewer need to see?",
-        "example": "TODO: Give a concrete example scenario",
-        "approval_path": "TODO: Explain approve, reject and timeout behavior",
-        "audit_fields": "TODO: List correlation ID, intent, diff and reviewer decision",
+        "name": "Sensitive Credential & PII Change Verification",
+        "trigger": "Action is 'change_password', 'update_personal_info', or modifications to customer phone/national ID/email",
+        "hitl_model": "human-in-the-loop",
+        "context_needed": "Original customer profile vs proposed update diff, multi-factor authentication / eKYC status, device fingerprint, geographic location anomaly",
+        "example": "Customer asks assistant to change registered phone number and reset password without biometric verification",
+        "approval_path": "Approve: operator verifies eKYC photo match and records approval; Reject: locks account profile and alerts fraud team; Timeout (15m): auto-rejects change and reverts to safe state",
+        "audit_fields": "correlation_id, request_id, reviewer_id, user_id, action_type, old_pii_hash, new_pii_hash, pii_diff, decision, timestamp",
     },
     {
         "id": 3,
-        "name": "TODO: Name this decision point",
-        "trigger": "TODO: When does this trigger?",
-        "hitl_model": "TODO: human-in-the-loop / human-on-the-loop / human-as-tiebreaker",
-        "context_needed": "TODO: What does the reviewer need to see?",
-        "example": "TODO: Give a concrete example scenario",
-        "approval_path": "TODO: Explain approve, reject and timeout behavior",
-        "audit_fields": "TODO: List correlation ID, intent, diff and reviewer decision",
+        "name": "Disputed Transaction & Policy Ambiguity Review",
+        "trigger": "Agent confidence score is between 0.70 and 0.90 for fee waivers, loan dispute, or unusual customer complaints",
+        "hitl_model": "human-on-the-loop",
+        "context_needed": "Customer conversation transcript, retrieved banking policies/contracts, draft AI response, confidence explanation, customer history tier",
+        "example": "Customer requests early savings withdrawal without fee penalty citing special medical emergency; model confidence is 0.78",
+        "approval_path": "Approve: supervisor validates exception and dispatches AI response; Edit: supervisor modifies draft response before sending; Timeout (5m): sends conservative default bank policy message",
+        "audit_fields": "correlation_id, request_id, reviewer_id, user_id, intent, ai_draft_response, final_response, confidence, decision, latency_ms, timestamp",
     },
 ]
 
